@@ -1,4 +1,4 @@
 #!/bin/bash
-
 set -e
-sudo gunicorn --reload -b 0.0.0.0:80 q:read
+
+sudo gunicorn --reload -b 127.0.1.2:80 q:read
