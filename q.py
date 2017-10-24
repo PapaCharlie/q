@@ -56,7 +56,7 @@ def read(environ, start_response):
 
 
 def find_link(path):
-    with open("shortcuts.yaml") as f:
+    with open(os.environ["SHORTCUTS"]) as f:
         last = load(f)
     segments = [seg for seg in path.split('/') if len(seg) > 0]
     for seg in segments:
@@ -70,7 +70,6 @@ def find_link(path):
         else:
             return None
     return last
-
 
 
 if __name__ == '__main__':
