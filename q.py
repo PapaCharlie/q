@@ -1,11 +1,7 @@
 #!/usr/bin/python
 
-import sys
+import filelock
 import os
-import SimpleHTTPServer
-import SocketServer
-import BaseHTTPServer
-import time
 
 from yaml import load, dump
 try:
@@ -13,52 +9,20 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 
+SHORTCUTS_LOCK = filelock.FileLock(os.environ["SHORTCUTS_LOCK"])
 
-HOST_NAME = "0.0.0.0"
-PORT_NUMBER = 80
+def open_shortcuts(mode='r'):
+    return open(os.environ["SHORTCUTS"], mode)
 
-class QHandler(BaseHTTPServer.BaseHTTPRequestHandler):
-    def do_GET(self):
-        if "favicon" in self.path.lower():
-            self.send_response(404, "Not Found")
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            self.wfile.write("")
-        else:
-            res = find_link(self.path)
-            if res is None:
-                self.send_response(404, "%s is not a known shortcut"%self.path)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write("")
-            else:
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
-                self.send_header("Location", res)
-                self.end_headers()
-                self.wfile.write(res)
 
 def not_found(start_response, message="Not Found"):
     start_response("404 Not Found", [])
     return iter([message])
 
-def read(environ, start_response):
-    path = environ["PATH_INFO"]
-    if "favicon" in path.lower():
-        return not_found(start_response)
 
-    res = find_link(path)
-    if res is None:
-        return not_found(start_response, message="%s is not a known shortcut"%path)
-    else:
-        start_response("307 Temporary Redirect", [("Content-type", "text/html"), ("Location", res)])
-        return iter([res])
-
-
-def find_link(path):
-    with open(os.environ["SHORTCUTS"]) as f:
-        last = load(f)
-    segments = [seg for seg in path.split('/') if len(seg) > 0]
+def find_link(segments):
+    with open_shortcuts() as f, SHORTCUTS_LOCK:
+        last = load(f, Loader=Loader)
     for seg in segments:
         if seg in last:
             last = last[seg]
@@ -72,13 +36,45 @@ def find_link(path):
     return last
 
 
-if __name__ == '__main__':
-    server_class = BaseHTTPServer.HTTPServer
-    httpd = server_class((HOST_NAME, PORT_NUMBER), QHandler)
-    print time.asctime(), "Server Starts - %s:%s" % (HOST_NAME, PORT_NUMBER)
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    httpd.server_close()
-    print time.asctime(), "Server Stops - %s:%s" % (HOST_NAME, PORT_NUMBER)
+def save_shortcut(segments, link):
+    with open_shortcuts() as f, SHORTCUTS_LOCK:
+        shortcuts = load(f, Loader=Loader)
+    last = shortcuts
+    for seg in segments[:-1]:
+        if seg not in last:
+            last[seg] = dict()
+        last = last[seg]
+    last[segments[-1]] = link
+    with open_shortcuts('w') as f, SHORTCUTS_LOCK:
+        dump(shortcuts, f, Dumper=Dumper, default_flow_style=False)
+
+
+def read(environ, start_response):
+    path = environ["PATH_INFO"]
+
+    if "favicon" in path.lower():
+        return not_found(start_response)
+
+    if len(path.replace("/","")) == 0:
+        with open_shortcuts() as f, SHORTCUTS_LOCK:
+            return iter([f.read()])
+
+    if path.startswith("/ "):
+        query = path.split(" ")
+        if len(query) != 3:
+            raise Exception("asdasd")
+        shortcut, link = query[1:]
+        segments = [seg for seg in shortcut.split('/') if len(seg) > 0]
+        save_shortcut(segments, link)
+        return iter(["Added %s as `%s`"%(link, shortcut)])
+    else:
+        segments = [seg for seg in path.split('/') if len(seg) > 0]
+        print segments
+        res = find_link(segments)
+        if res is None:
+            return not_found(start_response, message="%s is not a known shortcut"%path)
+        else:
+            if not res.startswith("http"):
+                res = "http://" + res
+            start_response("307 Temporary Redirect", [("Content-type", "text/html"), ("Location", res)])
+            return iter([res])
