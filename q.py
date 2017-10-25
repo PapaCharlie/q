@@ -11,8 +11,19 @@ except ImportError:
 
 SHORTCUTS_LOCK = filelock.FileLock(os.environ["SHORTCUTS_LOCK"])
 
-def open_shortcuts(mode='r'):
-    return open(os.environ["SHORTCUTS"], mode)
+class ShortcutFile(file):
+    def __init__(self, mode='r', lock=SHORTCUTS_LOCK):
+        super(ShortcutFile, self).__init__(os.environ["SHORTCUTS"], mode)
+        self.__lock = lock
+
+    def __enter__(self, *args, **kwargs):
+        self.__lock.__enter__(*args, **kwargs)
+        super(ShortcutFile, self).__enter__(*args, **kwargs)
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        super(ShortcutFile, self).__exit__(*args, **kwargs)
+        self.__lock.__exit__(*args, **kwargs)
 
 
 def not_found(start_response, message="Not Found"):
@@ -21,7 +32,7 @@ def not_found(start_response, message="Not Found"):
 
 
 def find_link(segments):
-    with open_shortcuts() as f, SHORTCUTS_LOCK:
+    with ShortcutFile() as f:
         last = load(f, Loader=Loader)
     for seg in segments:
         if seg in last:
@@ -37,7 +48,7 @@ def find_link(segments):
 
 
 def save_shortcut(segments, link):
-    with open_shortcuts() as f, SHORTCUTS_LOCK:
+    with ShortcutFile() as f:
         shortcuts = load(f, Loader=Loader)
     last = shortcuts
     for seg in segments[:-1]:
@@ -45,7 +56,7 @@ def save_shortcut(segments, link):
             last[seg] = dict()
         last = last[seg]
     last[segments[-1]] = link
-    with open_shortcuts('w') as f, SHORTCUTS_LOCK:
+    with ShortcutFile('w') as f:
         dump(shortcuts, f, Dumper=Dumper, default_flow_style=False)
 
 
@@ -56,7 +67,7 @@ def read(environ, start_response):
         return not_found(start_response)
 
     if len(path.replace("/","")) == 0:
-        with open_shortcuts() as f, SHORTCUTS_LOCK:
+        with ShortcutFile() as f:
             return iter([f.read()])
 
     if path.startswith("/ "):
