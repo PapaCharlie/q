@@ -16,13 +16,13 @@ start:
 		--log-file $(Q_DIR)/q.log \
 		--workers 4 \
 		--reload \
-		--bind $(LOOPBACK_IP):80 \
+		--bind $(Q_LOOPBACK_IP):80 \
 		--env SHORTCUTS="$(Q_SHORTCUTS_FILE)" \
 		--env SHORTCUTS_LOCK="$(Q_SHORTCUTS_LOCK)" \
 		q:read
 
 loopback-alias:
-	sudo ifconfig lo0 alias $(LOOPBACK_IP)
+	sudo ifconfig lo0 alias $(Q_LOOPBACK_IP)
 
 kill:
 	sudo kill $(shell cat $(Q_DIR)/q.pid)
