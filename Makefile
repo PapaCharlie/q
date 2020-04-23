@@ -2,11 +2,11 @@
 Q_DIR ?= /var/tmp/q
 Q_SHORTCUTS_FILE ?= $(shell echo ~/.q.yaml)
 Q_SHORTCUTS_LOCK ?= $(Q_DIR)/shortcuts_lock
-Q_LOOPBACK_IP ?= 127.0.1.2
+Q_LOOPBACK_IP ?= 127.0.2.2
 
 all: start
 
-start:
+start: loopback-alias
 	mkdir -p $(Q_DIR)
 	test -e $(Q_DIR)/q.pid && echo "q is already running!" && exit 1 || true
 	sudo gunicorn \
